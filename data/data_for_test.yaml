@@ -1,0 +1,34 @@
+# parent
+# ├── control
+# └── datasets
+#     └── images
+#         └── train
+#         └── val
+#     └── labels
+#         └── train
+#         └── val
+# └── raw_data
+#     └── Data for test
+#         └── Bed
+#         └── Chair
+#         └── Sofa
+
+
+# Train/val/test sets
+raw_path: ../raw_data/Data for test/  # raw data root dir
+datasets_path: ../datasets/  # dataset root dir
+train_images: images/train/  # train images (relative to 'datasets path')
+val_images: images/val/  # val images (relative to 'datasets path')
+train_labels: labels/train/  # train labels (relative to 'datasets path')
+val_labels: labels/val/  # val labels (relative to 'datasets path')
+train_labels_file: train.csv  # the csv file to save train details
+val_labels_file: val.csv  # tje csv file to save val details
+
+# train/val = 8/2
+train_size: 0.8
+
+# Categories
+categories: {Bed: 0, Chair: 1, Sofa: 2}
+
+# Scaled size
+scaled_size: [224, 224]
