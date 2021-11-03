@@ -27,7 +27,6 @@ import pandas as pd
 from torchvision import transforms, utils
 import matplotlib.pyplot as plt
 from utils.gerenal_tools import open_yaml
-from data.rescale_images import Rescale
 from skimage import io
 
 
@@ -56,8 +55,8 @@ def generate_datasets():
     val = df.loc[scale:]
     resize_images(train, paras["raw_path"], paras["datasets_path"] + paras["train_images"])
     resize_images(val, paras["raw_path"], paras["datasets_path"] + paras["val_images"])
-    train[["image_name", "label"]].to_csv(paras["datasets_path"] + paras["train_labels"] + paras["train_labels_file"])
-    val[["image_name", "label"]].to_csv(paras["datasets_path"] + paras["val_labels"] + paras["val_labels_file"])
+    train[["image_name", "label"]].to_csv(paras["datasets_path"] + paras["train_labels"] + paras["train_labels_file"], index=None)
+    val[["image_name", "label"]].to_csv(paras["datasets_path"] + paras["val_labels"] + paras["val_labels_file"], index=None)
 
 
 def resize_images(df, source_path, destination_path):
@@ -68,7 +67,6 @@ def resize_images(df, source_path, destination_path):
     :param destination_path: string
     :return: None
     """
-    scale = Rescale(tuple(paras["scaled_size"]))  # Scale the image to fit VGG16
     for index, row in df.iterrows():
         image_name = row["image_name"]
         label_name = row["label_name"]
@@ -79,9 +77,9 @@ def resize_images(df, source_path, destination_path):
         # fig = plt.figure()
         # plt.imshow(temp)
         # plt.show()
-        scaled = scale(temp)
-        print(temp.shape, scaled.shape)
-        io.imsave(image_destination_path, scaled)
+
+        print(temp.shape)
+        io.imsave(image_destination_path, temp)
 
 
 if __name__ == '__main__':
