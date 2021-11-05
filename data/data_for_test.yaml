@@ -13,7 +13,6 @@
 #         └── Chair
 #         └── Sofa
 
-
 # Train/val/test sets
 raw_path: ../raw_data/Data for test/  # raw data root dir
 datasets_path: ../datasets/  # dataset root dir
@@ -27,8 +26,20 @@ val_labels_file: val.csv  # tje csv file to save val details
 # train/val = 8/2
 train_size: 0.8
 
+model_name: new.pt
+
 # Categories
 categories: {Bed: 0, Chair: 1, Sofa: 2}
 
 # Scaled size
 scaled_size: [224, 224]
+
+model_saved_path: ../model/
+batch_size: 12
+epochs: 20
+lr: 0.001  # learning rate
+momentum: 0.9
+step_size: 20  # Period of learning rate decay.
+gamma: 0.1  # Multiplicative factor of learning rate decay.
+
+number_workers: 0  # must be 0 in Windows

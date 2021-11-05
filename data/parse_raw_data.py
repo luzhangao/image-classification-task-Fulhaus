@@ -53,15 +53,15 @@ def generate_datasets():
     scale = math.floor(paras["train_size"] * df.shape[0])
     train = df.loc[0: scale-1]
     val = df.loc[scale:]
-    resize_images(train, paras["raw_path"], paras["datasets_path"] + paras["train_images"])
-    resize_images(val, paras["raw_path"], paras["datasets_path"] + paras["val_images"])
+    duplicate_images(train, paras["raw_path"], paras["datasets_path"] + paras["train_images"])
+    duplicate_images(val, paras["raw_path"], paras["datasets_path"] + paras["val_images"])
     train[["image_name", "label"]].to_csv(paras["datasets_path"] + paras["train_labels"] + paras["train_labels_file"], index=None)
     val[["image_name", "label"]].to_csv(paras["datasets_path"] + paras["val_labels"] + paras["val_labels_file"], index=None)
 
 
-def resize_images(df, source_path, destination_path):
+def duplicate_images(df, source_path, destination_path):
     """
-    Resize images by the image names
+    Duplicate images by the image names
     :param df: pd.DataFrame, it contains two columns: "image_name" and "label".
     :param source_path: string
     :param destination_path: string

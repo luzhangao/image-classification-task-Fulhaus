@@ -9,7 +9,10 @@
 
 
 import copy
+import numpy as np
+import matplotlib.pyplot as plt
 import time
+import wandb
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -21,11 +24,23 @@ from utils.gerenal_tools import open_yaml
 from model.load_datasets import ImageDataset
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+wandb_switch = True
 paras = open_yaml("../data/data_for_test.yaml")
+if wandb_switch:
+    wandb.init(project="image-classification-fulhaus", entity="luzhangao")
+    wandb.config = {
+        "learning_rate": paras["lr"],
+        "epochs": paras["epochs"],
+        "batch_size": paras["batch_size"]
+    }
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def run():
+    """
+    Run the training process
+    :return:
+    """
     train_dataset = ImageDataset(
         paras["datasets_path"] + paras["train_labels"] + paras["train_labels_file"],
         paras["datasets_path"] + paras["train_images"],
@@ -52,34 +67,102 @@ def run():
         )
     )
 
-    train_dataloader = DataLoader(train_dataset, batch_size=paras["batch_size"], shuffle=True, num_workers=0)
-    val_dataloader = DataLoader(val_dataset, batch_size=paras["batch_size"], shuffle=True, num_workers=0)
+    train_dataloader = DataLoader(train_dataset, batch_size=paras["batch_size"], shuffle=True, num_workers=paras["number_workers"])
+    val_dataloader = DataLoader(val_dataset, batch_size=paras["batch_size"], shuffle=True, num_workers=paras["number_workers"])
     dataloaders = {"train": train_dataloader, "val": val_dataloader}
 
-    model = models.vgg16_bn(pretrained=True)
+    model = models.vgg16_bn(pretrained=True)  # Load pretrained VGG16 model.
+    # Freeze model weights.
     for param in model.parameters():
         param.requires_grad = False
-
-    if torch.cuda.is_available():
-        model = model.cuda()
-
+    # Update the weights for the last layer because there are 3 categories need to be classify,
+    # which is different from the original VGG16 model.
     model.classifier[6] = Sequential(Linear(4096, 3))
-    # model.classifier
+    # Activate the model weights for the last layer
     for param in model.classifier[6].parameters():
         param.requires_grad = True
     # print(model)
 
+    # Move model to GPU.
     if torch.cuda.is_available():
         model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-    scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
+    optimizer = optim.SGD(model.parameters(), lr=paras["lr"], momentum=paras["momentum"])
+    scheduler = StepLR(optimizer, step_size=paras["step_size"], gamma=paras["gamma"])
 
-    train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=20)
+    new_model = train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=paras["epochs"])
+    torch.save(new_model, paras["model_saved_path"] + paras["model_name"])
+    new_model = torch.load(paras["model_saved_path"] + paras["model_name"])
+    new_model.eval()
+    for _ in range(10):
+        visualize_model(new_model, dataloaders["val"])
+
+
+def imshow(inp, title=None):
+    """
+    Imshow for Tensor.
+    :param inp: torch.Tensor
+    :param title: string
+    :return:
+    """
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    plt.imshow(inp)
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.5)
+
+
+def visualize_model(model, dataloader, num_images=6):
+    """
+
+    :param model: torchvision.models
+    :param dataloader: torch.utils.data.dataloader.DataLoader
+    :param num_images: int
+    :return:
+    """
+    was_training = model.training
+    model.eval()
+    images_so_far = 0
+    fig = plt.figure()
+
+    class_names = {v: k for k, v in paras["categories"].items()}
+    with torch.no_grad():
+        for i, (inputs, labels) in enumerate(dataloader):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = model(inputs)  # Predict from input tensors.
+            _, preds = torch.max(outputs, 1)
+
+            for j in range(inputs.size()[0]):
+                images_so_far += 1
+                ax = plt.subplot(num_images//2, 2, images_so_far)
+                ax.axis('off')
+                ax.set_title('predicted: {}, label: {}'.format(class_names[preds[j].item()], class_names[labels[j].item()]))
+                imshow(inputs.cpu().data[j])
+
+                if images_so_far == num_images:
+                    model.train(mode=was_training)
+                    return
+        model.train(mode=was_training)
 
 
 def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=25):
+    """
+
+    :param model: torchvision.models
+    :param dataloaders: dict, {key: torch.utils.data.dataloader.DataLoader}
+    :param criterion: e.g. torch.nn.modules.loss.CrossEntropyLoss
+    :param optimizer: e.g. torch.optim.sgd.SGD
+    :param scheduler: e.g. torch.optim.lr_scheduler
+    :param num_epochs: int
+    :return:
+    """
     since = time.time()
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
@@ -117,6 +200,7 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=
                     outputs = model(inputs)
                     _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
+                    wandb.log({"loss": loss}) if wandb_switch else None
 
                     # backward + optimize only if in training phase
                     if phase == "train":
@@ -132,6 +216,9 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=
 
             epoch_loss = running_loss / (len(loader) * paras["batch_size"])
             epoch_acc = running_corrects.double() / (len(loader) * paras["batch_size"])
+            if wandb_switch:
+                wandb.log({"epoch loss": epoch_loss})
+                wandb.log({"epoch acc": epoch_acc})
 
             print("{} Loss: {:.4f} Acc: {:.4f}".format(
                 phase, epoch_loss, epoch_acc))
@@ -153,5 +240,6 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=
 
 if __name__ == '__main__':
     run()
+
 
 
